@@ -217,15 +217,15 @@ fun MyScreenContent() {
         if (result > 999 && result < 1000000) {
             result = "%.3f".format(result / 1000).toDouble()
             prefix = "K"
-            tolerance = tolerance / 1000
+            tolerance /= 1000
         } else if (result < 1000000000 && result > 1000000) {
             result = "%.3f".format(result / 1000000).toDouble()
             prefix = "M"
-            tolerance = tolerance / 1000000
+            tolerance /= 1000000
         } else if (result < 1000000000000 && result > 1000000000) {
             result = "%.3f".format(result / 1000000000).toDouble()
             prefix = "G"
-            tolerance = tolerance / 1000000000
+            tolerance /= 1000000000
         }
     }
 
@@ -246,7 +246,7 @@ fun MyScreenContent() {
         Row(modifier = Modifier.align(alignment = CenterHorizontally)) {
             Button(onClick = {
                 calcRes()
-                if (error == true) {
+                if (error) {
                     Toast.makeText(context, "error", Toast.LENGTH_SHORT).show()
                 }
             }) {
