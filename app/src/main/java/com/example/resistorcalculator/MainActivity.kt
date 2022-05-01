@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -26,12 +25,12 @@ import com.example.resistorcalculator.ui.theme.ResistorCalculatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainViewModel : ViewModel() {
-    val bands = Array<BandColor?>(6) { null }
+    val bands = Array(6) { MutableStateFlow<BandColor?>(null) }
     val result = MutableStateFlow<Result?>(null)
 
     fun calculate() {
         result.value = try {
-            val resistor = calculateResistor(bands.filterNotNull())
+            val resistor = calculateResistor(bands.mapNotNull { it.value })
             Result.Ok(prefixedValues(resistor))
         } catch (e: Exception) {
             Result.Err(e.message!!)
@@ -40,7 +39,7 @@ class MainViewModel : ViewModel() {
 }
 
 class MainActivity : ComponentActivity() {
-    val model: MainViewModel by viewModels()
+    private val model: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,20 +73,17 @@ fun MainContent(model: MainViewModel) {
         null -> null
     }
 
-    // declaring a list of bands so that the exact position of a given band is not important, only the order of all bands.
-    // for example: [brown,brown,black,green] == [brown, brown, empty, black, green]
-
     val configuration = LocalConfiguration.current
     // simple column/row design
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(top = 30.dp, start = 10.dp, end = 8.dp)) {
             val btnWidth = (configuration.screenWidthDp.dp - 32.dp) / 6
-            DropDownColorPicker("b1", btnWidth, model.bands, 0)
-            DropDownColorPicker("b2", btnWidth, model.bands, 1)
-            DropDownColorPicker("b3", btnWidth, model.bands, 2)
-            DropDownColorPicker("b4", btnWidth, model.bands, 3)
-            DropDownColorPicker("b5", btnWidth, model.bands, 4)
-            DropDownColorPicker("b6", btnWidth, model.bands, 5)
+            DropDownColorPicker("b1", btnWidth, model.bands[0])
+            DropDownColorPicker("b2", btnWidth, model.bands[1])
+            DropDownColorPicker("b3", btnWidth, model.bands[2])
+            DropDownColorPicker("b4", btnWidth, model.bands[3])
+            DropDownColorPicker("b5", btnWidth, model.bands[4])
+            DropDownColorPicker("b6", btnWidth, model.bands[5])
         }
         Divider(thickness = 2.dp, modifier = Modifier.padding(vertical = 25.dp))
         Row(
@@ -147,11 +143,11 @@ fun MainContent(model: MainViewModel) {
                         values = values
                     )
                 }
-                values?.tempCoefficient?.let { coeffient ->
+                values?.tempCoefficient?.let { coefficient ->
                     Row(modifier = Modifier.padding(bottom = 5.dp)) {
                         TempCoefficientField(
                             modifier = Modifier,
-                            coefficient = coeffient
+                            coefficient = coefficient
                         )
                     }
                 }
@@ -245,10 +241,12 @@ fun TempCoefficientField(modifier: Modifier, coefficient: Int) {
 
 // Component to pick Colors in this application each one of these represents one band of the resistor
 @Composable
-fun DropDownColorPicker(name: String, width: Dp, bands: Array<BandColor?>, index: Int) {
+fun DropDownColorPicker(name: String, width: Dp, bandState: MutableStateFlow<BandColor?>) {
+    val band by bandState.collectAsState()
+    val btnColor = band?.background ?: MaterialTheme.colors.surface
+    val btnTextColor = band?.text ?: MaterialTheme.colors.onSurface
+
     var expanded by remember { mutableStateOf(false) }
-    var btnColor by remember { mutableStateOf(Color.White) }
-    var btnTextColor by remember { mutableStateOf(Color.Black) }
 
     Box(modifier = Modifier.padding(end = 2.dp)) {
         Button(
@@ -273,35 +271,22 @@ fun DropDownColorPicker(name: String, width: Dp, bands: Array<BandColor?>, index
                 DropdownMenuItem(
                     onClick = {
                         expanded = false
-                        btnColor = bandColor.background
-                        btnTextColor = bandColor.text
-                        bands[index] = bandColor
+                        bandState.value = bandColor
                     },
                     modifier = Modifier
                         .height(22.dp)
                         .background(color = bandColor.background)
-                )
-                {
-                    Text(text = "")
-                }
+                ) {}
             }
             DropdownMenuItem(
                 onClick = {
                     expanded = false
-                    btnColor = Color.Transparent
-                    btnTextColor = Color.Black
-                    bands[index] = null
+                    bandState.value = null
                 },
-                modifier = Modifier
-                    .height(22.dp)
-                    .background(color = Color.Transparent)
+                modifier = Modifier.height(22.dp)
             )
             {
-                Text(
-                    text = "Clear",
-                    color = Color.Black,
-                    modifier = Modifier.background(Color.White)
-                )
+                Text(text = "Clear")
             }
         }
     }
