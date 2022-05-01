@@ -32,8 +32,8 @@ class MainViewModel : ViewModel() {
         result.value = try {
             val resistor = calculateResistor(bands.mapNotNull { it.value })
             Result.Ok(prefixedValues(resistor))
-        } catch (e: Exception) {
-            Result.Err(e.message!!)
+        } catch (e: CalculationException) {
+            Result.Err(e.message.orEmpty())
         }
     }
 }

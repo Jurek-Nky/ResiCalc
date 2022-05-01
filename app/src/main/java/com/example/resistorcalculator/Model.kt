@@ -36,10 +36,11 @@ data class PrefixedValues(
     val tempCoefficient: Int?,
 )
 
-class MissingBandColorsException(message: String) : RuntimeException(message)
-class InvalidToleranceColorException(message: String) : RuntimeException(message)
-class InvalidTempCoefficientColorException(message: String) : RuntimeException(message)
-class InvalidResistanceColorException(message: String) : RuntimeException(message)
+open class CalculationException(message: String): RuntimeException(message)
+class MissingBandColorsException(message: String) : CalculationException(message)
+class InvalidToleranceColorException(message: String) : CalculationException(message)
+class InvalidTempCoefficientColorException(message: String) : CalculationException(message)
+class InvalidResistanceColorException(message: String) : CalculationException(message)
 
 // returns the result for the factor-band
 fun factor(sum: Double, facBand: BandColor): Double {
