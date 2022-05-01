@@ -22,12 +22,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import com.example.resistorcalculator.BandColor.*
 import com.example.resistorcalculator.ui.theme.ResistorCalculatorTheme
-import kotlin.math.pow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainViewModel : ViewModel() {
-    val bands = Bands()
+    val bands = Array<BandColor?>(6) { null }
+    val result = MutableStateFlow<Result?>(null)
+
+    fun calculate() {
+        result.value = try {
+            val resistor = calculateResistor(bands.filterNotNull())
+            Result.Ok(prefixedValues(resistor))
+        } catch (e: Exception) {
+            Result.Err(e.message!!)
+        }
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -42,7 +51,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                    MainContent(model.bands)
+                    MainContent(model)
                 }
             }
         }
@@ -50,199 +59,35 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainContent(bands: Bands) {
-    var result: Double by remember {
-        mutableStateOf(0.0)
-    }
-    var tolerance: Double by remember {
-        mutableStateOf(0.0)
-    }
-    var error: Boolean by remember {
-        mutableStateOf(false)
-    }
-    var errorMessage: String by remember {
-        mutableStateOf("")
-    }
-    var prefix: String by remember {
-        mutableStateOf("")
-    }
-    var tempCoefi: Int by remember {
-        mutableStateOf(0)
-    }
+fun MainContent(model: MainViewModel) {
+    val result by model.result.collectAsState()
 
-    fun calculateResult() {
-        error = false
-        errorMessage = ""
-        result = 0.0
-        tolerance = 0.0
-        prefix = ""
-        tempCoefi = 0
-
-        // returns the result for the factor-band
-        fun factor(sum: Double, facBand: BandColor): Double {
-            return when (facBand) {
-                Silver -> sum * 0.1
-                Gold -> sum * 0.01
-                else -> {
-                    val factor = 10.0.pow(facBand.ordinal)
-                    sum * factor
-                }
-            }
+    val values = when (val r = result) {
+        is Result.Err -> {
+            val context = LocalContext.current
+            Toast.makeText(context, r.message, Toast.LENGTH_SHORT).show()
+            null
         }
-
-        // returns the maximal tolerance for a given resistance
-        fun tolerance(prod: Double, band: BandColor): Double? {
-            return when (band) {
-                Brown -> prod * 0.01
-                Red -> prod * 0.02
-                Green -> prod * 0.005
-                Blue -> prod * 0.0025
-                Violet -> prod * 0.001
-                Grey -> prod * 0.0005
-                Silver -> prod * 0.1
-                Gold -> prod * 0.05
-                else -> {
-                    errorMessage = "There is no tolerance associated to this color!"
-                    error = true
-                    null
-                }
-            }
+        is Result.Ok -> {
+            r.values
         }
-
-        // returns the temperature coefficient for a given band
-        fun tempCoefe(band: BandColor): Int? {
-            return when (band) {
-                Brown -> 100
-                Red -> 50
-                Orange -> 15
-                Yellow -> 25
-                Blue -> 10
-                Violet -> 5
-                White -> 1
-                else -> {
-                    errorMessage = "There is no temperature coefficient associated to this Color"
-                    error = true
-                    null
-                }
-            }
-        }
-
-        // declaring a list of bands so that the exact position of a given band is not important, only the order of all bands.
-        // for example: [brown,brown,black,green] == [brown, brown, empty, black, green]
-        val bandList = listOfNotNull(
-            bands.band1,
-            bands.band2,
-            bands.band3,
-            bands.band4,
-            bands.band5,
-            bands.band6,
-        )
-
-        when (bandList.size) {
-            4 -> {
-                val (b0, b1, b2, b3) = bandList
-                if (b0.ordinal !in 1..9) {
-                    errorMessage = "Band 1 can't consist of the colors black, silver or gold"
-                    error = true
-                    return
-                }
-                if (b1.ordinal !in 0..9) {
-                    errorMessage = "Band 2 can't consist of the colors silver or gold"
-                    error = true
-                    return
-                }
-
-                val sum = (b2.ordinal * 10 + b1.ordinal).toDouble()
-                result = factor(sum, b2)
-                tolerance = tolerance(result, b3) ?: 0.0
-            }
-            5 -> {
-                val (b0, b1, b2, b3, b4) = bandList
-                if (b0.ordinal !in 1..9) {
-                    errorMessage = "Band 1 can't consist of the colors black, silver or gold"
-                    error = true
-                    return
-                }
-                if (b1.ordinal !in 0..9) {
-                    errorMessage = "Band 2 can't consist of the colors silver or gold"
-                    error = true
-                    return
-                }
-                if (b2.ordinal !in 0..9) {
-                    errorMessage = "Band 3 can't consist of the colors silver or gold"
-                    error = true
-                    return
-                }
-
-                val sum = (b0.ordinal * 100 + b1.ordinal * 10 + b2.ordinal).toDouble()
-                result = factor(sum, b3)
-                tolerance = tolerance(result, b4) ?: 0.0
-            }
-            6 -> {
-                val (b0, b1, b2, b3, b4) = bandList
-                if (b0.ordinal !in 1..9) {
-                    errorMessage = "Band 1 can't consist of the colors black, silver or gold"
-                    error = true
-                    return
-                }
-                if (b1.ordinal !in 0..9) {
-                    errorMessage = "Band 2 can't consist of the colors silver or gold"
-                    error = true
-                    return
-                }
-                if (b2.ordinal !in 0..9) {
-                    errorMessage = "Band 3 can't consist of the colors silver or gold"
-                    error = true
-                    return
-                }
-
-                val sum = (b0.ordinal * 100 + b1.ordinal * 10 + b0.ordinal).toDouble()
-                result = factor(sum, b3)
-                tolerance = tolerance(result, b4) ?: 0.0
-                tempCoefi = tempCoefe(bandList[5]) ?: 0
-            }
-            else -> {
-                errorMessage = "Not enough bands to calculate a result"
-                error = true
-            }
-        }
-
-        // if either a wrong color is set at a specific band or there are not enough colors to
-        // calculate a result, all results are set to 0 and the function returns
-        if (error) {
-            result = 0.0
-            tolerance = 0.0
-            tempCoefi = 0
-            return
-        }
-        if (result > 999 && result < 1000000) {
-            result = "%.3f".format(result / 1000).toDouble()
-            prefix = "K"
-            tolerance /= 1000.0
-        } else if (result < 1000000000 && result > 1000000) {
-            result = "%.3f".format(result / 1000000).toDouble()
-            prefix = "M"
-            tolerance /= 1000000
-        } else if (result < 1000000000000 && result > 1000000000) {
-            result = "%.3f".format(result / 1000000000).toDouble()
-            prefix = "G"
-            tolerance /= 1000000000
-        }
+        null -> null
     }
 
-    val context = LocalContext.current
+    // declaring a list of bands so that the exact position of a given band is not important, only the order of all bands.
+    // for example: [brown,brown,black,green] == [brown, brown, empty, black, green]
+
     val configuration = LocalConfiguration.current
-
     // simple column/row design
     Column(modifier = Modifier.fillMaxSize()) {
         Row(modifier = Modifier.padding(top = 30.dp, start = 10.dp, end = 8.dp)) {
             val btnWidth = (configuration.screenWidthDp.dp - 32.dp) / 6
-            DropDownColorPicker("b1", btnWidth, bands::band1::set)
-            DropDownColorPicker("b2", btnWidth, bands::band2::set)
-            DropDownColorPicker("b3", btnWidth, bands::band3::set)
-            DropDownColorPicker("b4", btnWidth, bands::band4::set)
-            DropDownColorPicker("b5", btnWidth, bands::band5::set)
-            DropDownColorPicker("b6", btnWidth, bands::band6::set)
+            DropDownColorPicker("b1", btnWidth, model.bands, 0)
+            DropDownColorPicker("b2", btnWidth, model.bands, 1)
+            DropDownColorPicker("b3", btnWidth, model.bands, 2)
+            DropDownColorPicker("b4", btnWidth, model.bands, 3)
+            DropDownColorPicker("b5", btnWidth, model.bands, 4)
+            DropDownColorPicker("b6", btnWidth, model.bands, 5)
         }
         Divider(thickness = 2.dp, modifier = Modifier.padding(vertical = 25.dp))
         Row(
@@ -252,10 +97,7 @@ fun MainContent(bands: Bands) {
         ) {
             Button(
                 onClick = {
-                    calculateResult()
-                    if (error) {
-                        Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show()
-                    }
+                    model.calculate()
                 }, modifier = Modifier
                     .shadow(3.dp)
                     .width(150.dp)
@@ -283,7 +125,7 @@ fun MainContent(bands: Bands) {
                     )
 
                 }
-                if (tempCoefi != 0) {
+                values?.tempCoefficient?.let {
                     Row(modifier = Modifier.padding(bottom = 5.dp)) {
                         Text(
                             text = "Temperature coefficient: ",
@@ -296,23 +138,21 @@ fun MainContent(bands: Bands) {
                 Row(modifier = Modifier.padding(bottom = 5.dp)) {
                     ResultField(
                         modifier = Modifier,
-                        result = result,
-                        prefix = prefix,
-                        error = error
+                        values = values
                     )
                 }
                 Row(modifier = Modifier.padding(bottom = 5.dp)) {
                     ToleranceField(
                         modifier = Modifier,
-                        tolerance = tolerance,
-                        result = result,
-                        prefix = prefix,
-                        error = error
+                        values = values
                     )
                 }
-                if (tempCoefi != 0) {
+                values?.tempCoefficient?.let { coeffient ->
                     Row(modifier = Modifier.padding(bottom = 5.dp)) {
-                        TempCoefField(modifier = Modifier, coefficient = tempCoefi)
+                        TempCoefficientField(
+                            modifier = Modifier,
+                            coefficient = coeffient
+                        )
                     }
                 }
             }
@@ -327,22 +167,26 @@ fun MainContent(bands: Bands) {
     }
 }
 
-@Composable
 // Component for displaying the result of the resistance multiplication
 // if error is true the field gets filled with ---- and turns red
-fun ResultField(modifier: Modifier, result: Double, prefix: String, error: Boolean) {
-    if (error) {
+@Composable
+fun ResultField(modifier: Modifier, values: PrefixedValues?) {
+    if (values == null) {
         Text(
             text = "---- " + "Ω",
             modifier = modifier
                 .shadow(3.dp)
-                .background(color = MaterialTheme.colors.error, shape = MaterialTheme.shapes.medium)
+                .background(
+                    color = MaterialTheme.colors.error,
+                    shape = MaterialTheme.shapes.medium
+                )
                 .padding(5.dp),
             color = MaterialTheme.colors.onError
         )
     } else {
+        val (prefix, resistance) = values
         Text(
-            text = "$result $prefix" + "Ω",
+            text = "$resistance ${prefix}Ω",
             modifier = modifier
                 .shadow(3.dp)
                 .background(MaterialTheme.colors.secondary, shape = MaterialTheme.shapes.medium)
@@ -352,30 +196,31 @@ fun ResultField(modifier: Modifier, result: Double, prefix: String, error: Boole
     }
 }
 
-@Composable
 // Component for displaying the result of the resistance +- tolerance
 // if error is true the field gets filled with ---- and turns red
+@Composable
 fun ToleranceField(
     modifier: Modifier,
-    tolerance: Double,
-    result: Double,
-    prefix: String,
-    error: Boolean
+    values: PrefixedValues?,
 ) {
-    if (error) {
+    if (values == null) {
         Text(
             text = "---- Ω",
             modifier = modifier
                 .shadow(3.dp)
-                .background(color = MaterialTheme.colors.error, shape = MaterialTheme.shapes.medium)
+                .background(
+                    color = MaterialTheme.colors.error,
+                    shape = MaterialTheme.shapes.medium
+                )
                 .padding(5.dp),
             color = MaterialTheme.colors.onError
         )
     } else {
+        val (prefix, resistance, tolerance) = values
+        val min = "%.3f".format(resistance - tolerance)
+        val max = "%.3f".format(resistance + tolerance)
         Text(
-            text = "%.3f".format(result - tolerance) + " " + prefix + "Ω" + " - " + "%.3f".format(
-                result + tolerance
-            ) + " " + prefix + "Ω",
+            text = "$min ${prefix}Ω - $max ${prefix}Ω",
             modifier = modifier
                 .shadow(3.dp)
                 .background(MaterialTheme.colors.secondary, shape = MaterialTheme.shapes.medium)
@@ -385,9 +230,9 @@ fun ToleranceField(
     }
 }
 
-@Composable
 // Component for displaying the temperature coefficient
-fun TempCoefField(modifier: Modifier, coefficient: Int) {
+@Composable
+fun TempCoefficientField(modifier: Modifier, coefficient: Int) {
     Text(
         text = "$coefficient  ppm/◦C",
         modifier = modifier
@@ -398,9 +243,9 @@ fun TempCoefField(modifier: Modifier, coefficient: Int) {
     )
 }
 
-@Composable
 // Component to pick Colors in this application each one of these represents one band of the resistor
-fun DropDownColorPicker(name: String, width: Dp, callback: (BandColor?) -> Unit) {
+@Composable
+fun DropDownColorPicker(name: String, width: Dp, bands: Array<BandColor?>, index: Int) {
     var expanded by remember { mutableStateOf(false) }
     var btnColor by remember { mutableStateOf(Color.White) }
     var btnTextColor by remember { mutableStateOf(Color.Black) }
@@ -430,7 +275,7 @@ fun DropDownColorPicker(name: String, width: Dp, callback: (BandColor?) -> Unit)
                         expanded = false
                         btnColor = bandColor.background
                         btnTextColor = bandColor.text
-                        callback(bandColor)
+                        bands[index] = bandColor
                     },
                     modifier = Modifier
                         .height(22.dp)
@@ -445,7 +290,7 @@ fun DropDownColorPicker(name: String, width: Dp, callback: (BandColor?) -> Unit)
                     expanded = false
                     btnColor = Color.Transparent
                     btnTextColor = Color.Black
-                    callback(null)
+                    bands[index] = null
                 },
                 modifier = Modifier
                     .height(22.dp)
